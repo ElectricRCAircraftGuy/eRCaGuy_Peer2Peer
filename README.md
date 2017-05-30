@@ -1,5 +1,5 @@
 
-# eRCaGuy_Peer2Peer library 
+# eRCaGuy_Peer2Peer Arduino library 
 
 ## DESCRIPTION:   
  - A peer-to-peer send and receive synchronous communication protocol with handshaking and auto-timeout, that requires only 2 pins (any 2 pins) per peer and no additional timers, and no interrupts whatsoever (but can optionally use them for increased performance).  
