@@ -1,7 +1,10 @@
 
 # eRCaGuy_Peer2Peer library 
 
-## DESCRIPTION:  
+## DESCRIPTION:   
+ - A peer-to-peer send and receive synchronous communication protocol with handshaking and auto-timeout, that requires only 2 pins (any 2 pins) per peer and no additional timers, and no interrupts whatsoever (but can optionally use them for increased performance).  
+ - Use this library in place of SPI, standard Serial, or I2C (AKA IIC, Wire, or 2-Wire), when you don't want to be required to use hardware-specific pins.  
+ - Use in place of SoftwareSerial when you want to be able to receive without having to use Pin Change Interrupts.  
 
 ## AUTHOR:  
 By Gabriel Staples  
