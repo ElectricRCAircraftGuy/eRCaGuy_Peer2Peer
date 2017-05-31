@@ -93,12 +93,13 @@ struct sendReceive_t
 class eRCaGuy_Peer2Peer : public Stream //note that Stream inherits Print 
 {  
   public:
-    eRCaGuy_Peer2Peer(byte RxPin, byte TxPin, unsigned int timeout_ms=1000); //class constructor
+    eRCaGuy_Peer2Peer(byte RxPin, byte TxPin, unsigned int timeout_ms=1000, unsigned int clockDelay_us=20); //class constructor
     ~eRCaGuy_Peer2Peer(); //destructor 
     
     void begin();
     void end();
     void setTimeout(unsigned int timeout_ms);
+    void setClockDelay(unsigned int clockDelay_us);
     sendReceive_t sendReceive(); //send and receive data; call as frequently as possible to minimize blocking time delay the sender must sit and wait for the receiver to talk 
     
     //public virtual Print methods to implement 
@@ -117,7 +118,9 @@ class eRCaGuy_Peer2Peer : public Stream //note that Stream inherits Print
     //Also see here: https://arduino.stackexchange.com/questions/38965/help-understanding-printwrite-it-calls-write-where-is-write-defined-h 
   
   private:
-    unsigned int _timeout_ms; //ms timeout value until the sendReceive() function gives up 
+    unsigned int _timeout_ms; //ms; the timeout value until the sendReceive() function gives up when waiting for the receiver to respond  
+    unsigned int _clockDelay_us; //us; the forced delay the receiver will wait after clocking a new edge (in order to give the sender time to set its new data bit state) and before the receiver reads this new data bit and clocks yet another edge 
+    
     byte _TxPin; 
     byte _RxPin;
     byte _TxBuff[_PEER2PEER_TX_BUFF_SIZE];
@@ -132,6 +135,8 @@ class eRCaGuy_Peer2Peer : public Stream //note that Stream inherits Print
     unsigned int _RxBuffWriteLoc; 
     unsigned int _RxBuffNumBytes;
     
+    //private methods
+    bool placeByteInTxBuff(byte byteOut);
   
 };
 

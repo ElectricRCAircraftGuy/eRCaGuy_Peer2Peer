@@ -68,7 +68,7 @@ References:
 //-note they have no return types, whereas all other methods do 
 //=================================================================================================
 //Constructor 
-eRCaGuy_Peer2Peer::eRCaGuy_Peer2Peer(byte RxPin, byte TxPin, unsigned int timeout_ms)
+eRCaGuy_Peer2Peer::eRCaGuy_Peer2Peer(byte RxPin, byte TxPin, unsigned int timeout_ms, unsigned int clockDelay_us)
 {
   _TxPin = TxPin; 
   _RxPin = RxPin; 
@@ -82,6 +82,7 @@ eRCaGuy_Peer2Peer::eRCaGuy_Peer2Peer(byte RxPin, byte TxPin, unsigned int timeou
   _RxBuffNumBytes = 0;
   
   _timeout_ms = timeout_ms; //ms
+  _clockDelay_us = clockDelay_us; //us 
 }
 
 //Destructor 
@@ -115,6 +116,7 @@ void eRCaGuy_Peer2Peer::end()
 
 //-------------------------------------------------------------------------------------------------
 //setTimeout
+//-set the timeout, which is essentially how long we will wait in sendReceive when waiting for a receiver to respond to a sender wanting to send 
 //-------------------------------------------------------------------------------------------------
 void eRCaGuy_Peer2Peer::setTimeout(unsigned int timeout_ms)
 {
@@ -122,16 +124,28 @@ void eRCaGuy_Peer2Peer::setTimeout(unsigned int timeout_ms)
 }
 
 //-------------------------------------------------------------------------------------------------
+//setClockDelay
+//-set the clockDelay, which is the forced delay the receiver will wait after clocking a new edge (in order to give the sender time to set its new data bit state) and before the receiver reads this new data bit and clocks yet another edge 
+//-------------------------------------------------------------------------------------------------
+void eRCaGuy_Peer2Peer::setClockDelay(unsigned int clockDelay_us)
+{
+  _clockDelay_us = clockDelay_us; //us 
+}
+
+//-------------------------------------------------------------------------------------------------
 //sendReceive
 //-do the actual sending and receiving here
 //-NB: this is a BLOCKING command! ie: if there is data to be sent, it will BLOCK until either the receiver responds and accepts the data, or it times out; if there is data to be received, it will block while receiving it 
-//-call as frequently as possible to minimize the blocking time delay the sender must sit and wait for the receiver to talk 
+//-call as frequently as possible to minimize the blocking time delay that other senders must sit and wait for this device to receive and talk 
 //-returns a struct of type sendReceive_t, defined in the header file 
 //-------------------------------------------------------------------------------------------------
 sendReceive_t eRCaGuy_Peer2Peer::sendReceive()
 {
-  //////////////////////////
-  sendReceive_t sendReceiveState;
+  ///////////TODO (IN WORK)///////////////
+  
+  sendReceive_t sendReceiveState; //create a struct and load it with default values, as defined in the struct definition 
+  
+  
   
   return sendReceiveState;
 }
@@ -139,14 +153,38 @@ sendReceive_t eRCaGuy_Peer2Peer::sendReceive()
 //-------------------------------------------------------------------------------------------------
 //write
 //-virtual method 
+//-place the byte into the write buffer, or if the write buffer is full, do a blocking sendReceive and then try again to place it in  
 //-------------------------------------------------------------------------------------------------
-size_t eRCaGuy_Peer2Peer::write(uint8_t myByte)
+size_t eRCaGuy_Peer2Peer::write(uint8_t byteOut)
 {  
-  //store myByte into the Tx buffer so long as it's not full 
-  size_t bytesLoaded = 0;
+  //store byteOut into the Tx buffer so long as it's not full 
+  size_t bytesLoaded = placeByteInTxBuff(byteOut);
+  
+  if (bytesLoaded==0)
+  {
+    //_TxBuff is full, so do a blocking sendReceive and then try again
+    sendReceive();
+    bytesLoaded = placeByteInTxBuff(byteOut); //try again, this time giving up if still no luck, as it means the receiver isn't responding and sendReceive is timing out 
+  }
+  
+  return bytesLoaded;
+}
+
+//-------------------------------------------------------------------------------------------------
+//placeByteInTxBuff
+//-private method 
+//-place the byte into the Tx buffer
+//-returns the number of bytes placed into the Tx buffer (0 or 1)
+//--therefore, if it returns 0, it means the Tx buffer is currently full
+//-------------------------------------------------------------------------------------------------
+bool eRCaGuy_Peer2Peer::placeByteInTxBuff(byte byteOut)
+{
+  //store byteOut into the Tx buffer so long as it's not full 
+  bool bytesLoaded = 0;
   if (_TxBuffNumBytes<_PEER2PEER_TX_BUFF_SIZE)
   {
-    _TxBuff[_TxBuffWriteLoc] = myByte;
+    _TxBuff[_TxBuffWriteLoc] = byteOut;
+    _TxBuffNumBytes++;
     _TxBuffWriteLoc = (_TxBuffWriteLoc + 1) % _PEER2PEER_TX_BUFF_SIZE; //increment writeLoc 
     bytesLoaded = 1;
   }
@@ -170,7 +208,7 @@ int eRCaGuy_Peer2Peer::availableForWrite()
 //-------------------------------------------------------------------------------------------------
 int eRCaGuy_Peer2Peer::available()
 {
-  
+  return (int)_RxBuffNumBytes;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -181,7 +219,13 @@ int eRCaGuy_Peer2Peer::available()
 //-------------------------------------------------------------------------------------------------
 int eRCaGuy_Peer2Peer::read()
 {
-  
+  if (_RxBuffNumBytes==0)
+    return -1;
+  //else _RxBuffNumBytes>0
+  byte byteIn = _RxBuff[_RxBuffReadLoc];
+  _RxBuffNumBytes--;
+  _RxBuffReadLoc = (_RxBuffReadLoc + 1) % _PEER2PEER_RX_BUFF_SIZE; //increment and wrap around
+  return byteIn;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -193,18 +237,21 @@ int eRCaGuy_Peer2Peer::read()
 //-------------------------------------------------------------------------------------------------
 int eRCaGuy_Peer2Peer::peek()
 {
-  
+  if (_RxBuffNumBytes==0)
+    return -1;
+  //else _RxBuffNumBytes>0
+  return _RxBuff[_RxBuffReadLoc];
 }
 
 //-------------------------------------------------------------------------------------------------
 //flush 
 //-virtual method 
 //-implements the Stream flush method here: https://www.arduino.cc/en/Reference/StreamFlush
-//-is basically a blocking write, forcing the Tx buffer to be allowed to empty before returning 
+//-is basically a blocking write, forcing the Tx buffer to be allowed to empty before returning, unless it times out 
 //-------------------------------------------------------------------------------------------------
 void eRCaGuy_Peer2Peer::flush()
 {
-  
+  sendReceive();
 }
 
 
