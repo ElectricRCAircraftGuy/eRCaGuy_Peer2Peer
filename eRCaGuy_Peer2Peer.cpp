@@ -68,7 +68,7 @@ References:
 //-note they have no return types, whereas all other methods do 
 //=================================================================================================
 //Constructor 
-eRCaGuy_Peer2Peer::eRCaGuy_Peer2Peer(byte RxPin, byte TxPin)
+eRCaGuy_Peer2Peer::eRCaGuy_Peer2Peer(byte RxPin, byte TxPin, unsigned int timeout_ms)
 {
   _TxPin = TxPin; 
   _RxPin = RxPin; 
@@ -80,6 +80,8 @@ eRCaGuy_Peer2Peer::eRCaGuy_Peer2Peer(byte RxPin, byte TxPin)
   _RxBuffReadLoc = 0;
   _RxBuffWriteLoc = 0;
   _RxBuffNumBytes = 0;
+  
+  _timeout_ms = timeout_ms; //ms
 }
 
 //Destructor 
@@ -112,18 +114,31 @@ void eRCaGuy_Peer2Peer::end()
 }
 
 //-------------------------------------------------------------------------------------------------
+//setTimeout
+//-------------------------------------------------------------------------------------------------
+void eRCaGuy_Peer2Peer::setTimeout(unsigned int timeout_ms)
+{
+  _timeout_ms = timeout_ms; //ms 
+}
+
+//-------------------------------------------------------------------------------------------------
 //sendReceive
 //-do the actual sending and receiving here
 //-NB: this is a BLOCKING command! ie: if there is data to be sent, it will BLOCK until either the receiver responds and accepts the data, or it times out; if there is data to be received, it will block while receiving it 
+//-call as frequently as possible to minimize the blocking time delay the sender must sit and wait for the receiver to talk 
+//-returns a struct of type sendReceive_t, defined in the header file 
 //-------------------------------------------------------------------------------------------------
-void eRCaGuy_Peer2Peer::sendReceive()
+sendReceive_t eRCaGuy_Peer2Peer::sendReceive()
 {
-
+  //////////////////////////
+  sendReceive_t sendReceiveState;
   
+  return sendReceiveState;
 }
 
 //-------------------------------------------------------------------------------------------------
 //write
+//-virtual method 
 //-------------------------------------------------------------------------------------------------
 size_t eRCaGuy_Peer2Peer::write(uint8_t myByte)
 {  
@@ -140,15 +155,17 @@ size_t eRCaGuy_Peer2Peer::write(uint8_t myByte)
 
 //-------------------------------------------------------------------------------------------------
 //availableForWrite
+//-virtual method 
 //-returns # bytes sitting in the OUTGOING (Tx) buffer 
 //-------------------------------------------------------------------------------------------------
 int eRCaGuy_Peer2Peer::availableForWrite()
 {
-  
+  return (int)_TxBuffNumBytes;
 }
 
 //-------------------------------------------------------------------------------------------------
 //available
+//-virtual method 
 //-returns # bytes sitting in the INCOMING (Rx) buffer 
 //-------------------------------------------------------------------------------------------------
 int eRCaGuy_Peer2Peer::available()
@@ -158,6 +175,7 @@ int eRCaGuy_Peer2Peer::available()
 
 //-------------------------------------------------------------------------------------------------
 //read
+//-virtual method 
 //-implements the Stream read method here: https://www.arduino.cc/en/Reference/StreamRead 
 //-returns the first byte of incoming data or -1 if no data is available 
 //-------------------------------------------------------------------------------------------------
@@ -168,6 +186,7 @@ int eRCaGuy_Peer2Peer::read()
 
 //-------------------------------------------------------------------------------------------------
 //peek
+//-virtual method 
 //-implements the Stream peek method here: https://www.arduino.cc/en/Reference/StreamPeek
 //-Read a byte from the file without advancing to the next one. That is, successive calls to peek() will return the same value, as will the next call to read().
 //-returns the next byte (or character), or -1 if none is available.
@@ -179,6 +198,7 @@ int eRCaGuy_Peer2Peer::peek()
 
 //-------------------------------------------------------------------------------------------------
 //flush 
+//-virtual method 
 //-implements the Stream flush method here: https://www.arduino.cc/en/Reference/StreamFlush
 //-is basically a blocking write, forcing the Tx buffer to be allowed to empty before returning 
 //-------------------------------------------------------------------------------------------------

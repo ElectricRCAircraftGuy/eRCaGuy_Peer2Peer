@@ -77,20 +77,29 @@ HISTORY (newest on BOTTOM):
 /*
 ***IMPORTANT NOTE ABOUT RING BUFFERS***
 "A 'power of 2' buffer size is recommended to dramatically optimize all the modulo operations for ring buffers." (source: https://github.com/arduino/Arduino/blob/master/hardware/arduino/avr/cores/arduino/HardwareSerial.h)
--testing shows this to be absolutely true! It appears that using a ring buffer length that is a power of 2 (ex: 2, 4, 8, 16, 32, 64, etc) is about 2x or more faster than other ring buffer sizes near that size. ~GS 
+-previous testing in a different Arduino project shows this to be absolutely true! It appears that using a ring buffer length that is a power of 2 (ex: 2, 4, 8, 16, 32, 64, etc) is about 2x or more faster than other ring buffer sizes near that size. ~GS 
 */
 #define _PEER2PEER_TX_BUFF_SIZE 64 //Tx buffer length, make power of 2 for ring buffer modulus operator speed 
 #define _PEER2PEER_RX_BUFF_SIZE 64 //Rx buffer length, make power of 2 for ring buffer modulus operator speed
 
+//struct for sendReceive return values 
+struct sendReceive_t 
+{
+  unsigned int bytesSent = 0;
+  unsigned int bytesReceived = 0;
+  bool timedOut = false;
+};
+
 class eRCaGuy_Peer2Peer : public Stream //note that Stream inherits Print 
 {  
   public:
-    eRCaGuy_Peer2Peer(byte RxPin, byte TxPin);//, unsigned int timeout_ms=1000); //class constructor
+    eRCaGuy_Peer2Peer(byte RxPin, byte TxPin, unsigned int timeout_ms=1000); //class constructor
     ~eRCaGuy_Peer2Peer(); //destructor 
     
     void begin();
     void end();
-    void sendReceive(); //send and receive data; call as frequently as possible to minimize blocking time delay the sender must sit and wait for the receiver to talk 
+    void setTimeout(unsigned int timeout_ms);
+    sendReceive_t sendReceive(); //send and receive data; call as frequently as possible to minimize blocking time delay the sender must sit and wait for the receiver to talk 
     
     //public virtual Print methods to implement 
     virtual size_t write(uint8_t myByte); 
@@ -102,9 +111,13 @@ class eRCaGuy_Peer2Peer : public Stream //note that Stream inherits Print
     virtual int peek();
     virtual void flush(); 
     
-    using Print::write; //as SoftwareSerial.h does too, this line gives us access to the Print class's overloaded, *non*virtual implementations of write, while still defining the write method above as the default one to use when calling write through this Peer2Peer class, due to polymorphism. Some of the overloaded implementations of write defined in Print allow printing entire buffers (arrays of bytes), for instance.  
+    using Print::write; //as SoftwareSerial.h does too, this line gives us access to the Print class's overloaded, *non*virtual implementations of write, while still defining the write method above as the default one to use when calling write through this Peer2Peer class, due to polymorphism. Some of the overloaded implementations of write defined in Print allow printing entire buffers (arrays of bytes), for instance. 
+    //See here for an Arduino demonstration usage of the above: https://github.com/arduino/Arduino/blob/master/hardware/arduino/avr/cores/arduino/HardwareSerial.h
+    //-it says "using Print::write; // pull in write(str) and write(buf, size) from Print"
+    //Also see here: https://arduino.stackexchange.com/questions/38965/help-understanding-printwrite-it-calls-write-where-is-write-defined-h 
   
   private:
+    unsigned int _timeout_ms; //ms timeout value until the sendReceive() function gives up 
     byte _TxPin; 
     byte _RxPin;
     byte _TxBuff[_PEER2PEER_TX_BUFF_SIZE];

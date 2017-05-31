@@ -20,9 +20,9 @@ CIRCUIT:
 
 #include <eRCaGuy_Peer2Peer.h>
 
-//pins 
-const byte RX_PIN = A1;
-const byte TX_PIN = A0;
+//pins (choose any two pins)
+const byte RX_PIN = A0;
+const byte TX_PIN = A1;
 
 eRCaGuy_Peer2Peer peer1(RX_PIN, TX_PIN);
 
