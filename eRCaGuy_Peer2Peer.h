@@ -93,7 +93,7 @@ struct sendReceive_t
 class eRCaGuy_Peer2Peer : public Stream //note that Stream inherits Print 
 {  
   public:
-    eRCaGuy_Peer2Peer(byte RxPin, byte TxPin, unsigned int timeout_ms=1000, unsigned int clockDelay_us=20); //class constructor
+    eRCaGuy_Peer2Peer(byte RxPin, byte TxPin, unsigned int timeout_ms=1000, unsigned int clockDelay_us=20); //class constructor; <--TODO: FIND AN OPTIMAL/MORE APPROPRIATE DEFAULT VALUE FOR clockDelay_us ONCE I GET IT ALL WORKING 
     ~eRCaGuy_Peer2Peer(); //destructor 
     
     void begin();

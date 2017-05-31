@@ -102,6 +102,9 @@ void eRCaGuy_Peer2Peer::begin()
 {
   pinMode(_TxPin, OUTPUT);
   pinMode(_RxPin, INPUT);
+  
+  //start out with Tx pin LOW
+  digitalWrite(_TxPin, LOW);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -145,6 +148,27 @@ sendReceive_t eRCaGuy_Peer2Peer::sendReceive()
   
   sendReceive_t sendReceiveState; //create a struct and load it with default values, as defined in the struct definition 
   
+  //1st, RECEIVE DATA
+  //-check to see if Rx pin is HIGH, which indicates the other device wants to SEND data 
+  if (digitalRead(_RxPin)==HIGH)
+  {
+    //There is data to be received, so receive it
+    
+  }
+  
+  //2nd, SEND DATA, if we have any to send 
+  if (_TxBuffNumBytes>0)
+  {
+    //There is data to be sent, so send it 
+    //1st, set Tx pin HIGH to tell the other device, "I want to send"
+    digitalWrite(_TxPin, HIGH);
+    //2nd, poll and wait until the Rx pin goes HIGH which means the other device is ready to receive!
+    while (digitalRead(_RxPin==LOW)) {}
+    //ok, _RxPin is HIGH now, so set your next bit!
+  }
+  
+  //3rd, RECEIVE DATA again! 
+  //-Otherwise, you might waste a loop cycle before you receive the other one's data even though he wanted to send the whole time! It's just that he was super polite and received your data first (notice above--we receive first, BEFORE trying to send). So, be a gentleman and receive his data now before you go running off again!
   
   
   return sendReceiveState;
