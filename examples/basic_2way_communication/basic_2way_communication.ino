@@ -38,7 +38,7 @@ void setup()
   Serial.println("Begin");
   
   peer1.begin();
-  peer1.println("From peer1.");
+  peer1.println("From Arduino 1.");
 }
 
 //-----------------------------------------------------------------------------------------------
