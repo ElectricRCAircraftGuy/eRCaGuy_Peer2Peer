@@ -63,7 +63,7 @@ References:
 #include "eRCaGuy_Peer2Peer.h"
 
 //macros
-#define TIMED_OUT (-1)
+#define TIMED_OUT (65535)
 
 //=================================================================================================
 //Class Constructor & Destructor
@@ -172,7 +172,7 @@ sendReceive_t eRCaGuy_Peer2Peer::sendReceive()
   
   //2nd, SEND DATA, if we have any to send 
   unsigned int sendState = sendData();
-  if (sendData==TIMED_OUT)
+  if (sendState==TIMED_OUT)
     sendReceiveState.timedOut = true;
   else 
     sendReceiveState.bytesSent = sendState;
@@ -193,7 +193,7 @@ sendReceive_t eRCaGuy_Peer2Peer::sendReceive()
 //-private method 
 //-returns # bytes received, or -1 (same as 65535 actually, or "TIMED_OUT", since it is an unsigned value) if it times out 
 //-------------------------------------------------------------------------------------------------
-unsigned int receiveData()
+unsigned int eRCaGuy_Peer2Peer::receiveData()
 {
   unsigned int bytesReceived = 0;
   
@@ -212,7 +212,7 @@ unsigned int receiveData()
 //-private method 
 //-returns # bytes sent, or -1 (same as 65535 actually, or "TIMED_OUT", since it is an unsigned value) if it times out 
 //-------------------------------------------------------------------------------------------------
-unsigned int sendData()
+unsigned int eRCaGuy_Peer2Peer::sendData()
 {
   unsigned int bytesSent = 0;
   
