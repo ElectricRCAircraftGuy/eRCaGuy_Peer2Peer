@@ -62,6 +62,8 @@ References:
 
 #include "eRCaGuy_Peer2Peer.h"
 
+//macros
+#define TIMED_OUT (-1)
 
 //=================================================================================================
 //Class Constructor & Destructor
@@ -142,21 +144,79 @@ void eRCaGuy_Peer2Peer::setClockDelay(unsigned int clockDelay_us)
 //-call as frequently as possible to minimize the blocking time delay that other senders must sit and wait for this device to receive and talk 
 //-returns a struct of type sendReceive_t, defined in the header file 
 //-------------------------------------------------------------------------------------------------
+  ///////////TODO (IN WORK)///////////////
+/*
+Description of send/receive protocol:
+ - Tx = "transmitter" or "sender" below 
+ - Rx = "receiver" below 
+
+Tx writes pin HIGH to say "I want to send data". Rx comes around and eventually sees that and writes pin HIGH to say "I acknowledge you want to send." Once the Tx sees this, it disables interrupts and writes Tx pin LOW to say, "start clocking data for me." Rx disables interrupts and starts clocking bits by writing rising and falling edges (pin toggling). After each clock edge it writes it waits a FIXED_TIME_PD called "_clockDelay_us" in order to give the Tx time to set its data state on its Tx line. Since *both* the Tx and Rx have their interrupts *disabled* during all bit-sends, we can guarantee that A) the sender is always listening and responding within a fixed, determinate amount of time, and B) the time that interrupts are disabled is minimized because the receiver can NOT be interrupted either (thereby also prolonging the Tx's disabled-interrupt time) while clocking bits since its interrupts are ALSO disabled. 
+
+After the receiver (Rx) clocks 8 bits by toggling its Tx pin state 8 times and waiting the appropriate _clockDelay_us time pd after each clock edge and before reading the Tx's data state, it stops, writes its Tx pin LOW(*), and *enables* interrupts. Once the Tx has seen 8 clocked edges from the Rx it stops too, and it *enables* interrupts. Then, the Tx writes its Tx pin state HIGH again to say, "I want to send the next byte." At this moment, the Tx ensures _clockDelay_us time has passed BEFORE reading the acknowledgement pin from the Rx, to give the Rx adequate time to set its acknowledgement line LOW (see (*) point just above) before enabling and processing any interrupts (otherwise the Tx may read a false-positive acknowledgement from the Rx when the Rx is simply stuck processing a long ISR). The Tx's interrupts are still *en*abled. The Rx (interrupts still *en*abled), sees this HIGH state, and writes its Tx pin HIGH to say "I acknowledge you want to send." The sequence begins again as described above. 
+
+Q: What if the *Tx* has a really long interrupt after it writes its pin HIGH and before noticing that the Rx acknowledges? Will this mess up the sequence?
+A: NO, because once the Rx acknowledges, if the *Tx* is still stuck in a long ISR, it will simply take longer to exit the ISR, detect that the Rx acknowledged (the Rx will simply be sitting there blocking and waiting), disable interrupts, and write its Tx pin LOW to say, "start clocking data for me." No problems caused, other than making the Rx block a little longer while the Tx finished its ISR so it could tell the Rx to start clocking data for it. 
+Q: What if the *Rx* has a really long interrupt after clocking all 8 bits, waiting the appropriate _clockDelay_us time, reading the 8th bit from the Tx, writing its Tx pin LOW, and enabling interrupts? Will this mess up the sequence?
+A: NO, because this is the same as the Tx initially simply sitting around in a blocking wait waiting for the Rx to notice that it wants to send. Once the Rx exits its ISR, it will notice the Tx wants to send, write its pin HIGH to say "I acknowledge you want to send," and wait for the Tx to write its pin LOW to say, "start clocking data for me." No problems caused, other than making the Tx block a little longer while the Rx finished its ISR so it could acknowledge that the Tx wants to send. 
+*/
 sendReceive_t eRCaGuy_Peer2Peer::sendReceive()
 {
-  ///////////TODO (IN WORK)///////////////
-  
   sendReceive_t sendReceiveState; //create a struct and load it with default values, as defined in the struct definition 
   
   //1st, RECEIVE DATA
+  unsigned int receiveState = receiveData();
+  if (receiveState==TIMED_OUT)
+    sendReceiveState.timedOut = true;
+  else
+    sendReceiveState.bytesReceived = receiveState;
+  
+  //2nd, SEND DATA, if we have any to send 
+  unsigned int sendState = sendData();
+  if (sendData==TIMED_OUT)
+    sendReceiveState.timedOut = true;
+  else 
+    sendReceiveState.bytesSent = sendState;
+  
+  //3rd, RECEIVE DATA again! 
+  //-Otherwise, you might waste a loop cycle before you receive the other one's data even though he wanted to send the whole time! It's just that he was super polite and received your data first (notice above--we receive first, BEFORE trying to send). So, be a gentleman and receive his data now before you go running off again!
+  receiveState = receiveData();
+  if (receiveState==TIMED_OUT)
+    sendReceiveState.timedOut = true;
+  else
+    sendReceiveState.bytesReceived += receiveState;
+  
+  return sendReceiveState;
+}
+
+//-------------------------------------------------------------------------------------------------
+//receiveData
+//-private method 
+//-returns # bytes received, or -1 (same as 65535 actually, or "TIMED_OUT", since it is an unsigned value) if it times out 
+//-------------------------------------------------------------------------------------------------
+unsigned int receiveData()
+{
+  unsigned int bytesReceived = 0;
+  
   //-check to see if Rx pin is HIGH, which indicates the other device wants to SEND data 
   if (digitalRead(_RxPin)==HIGH)
   {
     //There is data to be received, so receive it
     
   }
+  ///////////
+  return bytesReceived;
+}
+
+//-------------------------------------------------------------------------------------------------
+//sendData
+//-private method 
+//-returns # bytes sent, or -1 (same as 65535 actually, or "TIMED_OUT", since it is an unsigned value) if it times out 
+//-------------------------------------------------------------------------------------------------
+unsigned int sendData()
+{
+  unsigned int bytesSent = 0;
   
-  //2nd, SEND DATA, if we have any to send 
+  /////////////////
   if (_TxBuffNumBytes>0)
   {
     //There is data to be sent, so send it 
@@ -167,11 +227,7 @@ sendReceive_t eRCaGuy_Peer2Peer::sendReceive()
     //ok, _RxPin is HIGH now, so set your next bit!
   }
   
-  //3rd, RECEIVE DATA again! 
-  //-Otherwise, you might waste a loop cycle before you receive the other one's data even though he wanted to send the whole time! It's just that he was super polite and received your data first (notice above--we receive first, BEFORE trying to send). So, be a gentleman and receive his data now before you go running off again!
-  
-  
-  return sendReceiveState;
+  return bytesSent;
 }
 
 //-------------------------------------------------------------------------------------------------

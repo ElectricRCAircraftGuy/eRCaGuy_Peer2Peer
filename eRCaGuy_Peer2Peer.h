@@ -121,12 +121,18 @@ class eRCaGuy_Peer2Peer : public Stream //note that Stream inherits Print
     unsigned int _timeout_ms; //ms; the timeout value until the sendReceive() function gives up when waiting for the receiver to respond  
     unsigned int _clockDelay_us; //us; the forced delay the receiver will wait after clocking a new edge (in order to give the sender time to set its new data bit state) and before the receiver reads this new data bit and clocks yet another edge 
     
+    //for fastDigitalRead command
+    
+    //for fastDigitalWrite command 
+    
+    //pins
     byte _TxPin; 
     byte _RxPin;
+    
+    //for ring buffers:
     byte _TxBuff[_PEER2PEER_TX_BUFF_SIZE];
     byte _RxBuff[_PEER2PEER_RX_BUFF_SIZE];
     
-    //for ring buffers:
     unsigned int _TxBuffReadLoc;
     unsigned int _TxBuffWriteLoc;
     unsigned int _TxBuffNumBytes; 
@@ -137,6 +143,8 @@ class eRCaGuy_Peer2Peer : public Stream //note that Stream inherits Print
     
     //private methods
     bool placeByteInTxBuff(byte byteOut);
+    unsigned int receiveData();
+    unsigned int sendData();
   
 };
 
