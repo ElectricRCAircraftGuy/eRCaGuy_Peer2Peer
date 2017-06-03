@@ -215,18 +215,25 @@ unsigned int eRCaGuy_Peer2Peer::receiveData()
         {
           byte byteIn = receiveByte();
           if (byteIn==TIMED_OUT)
+          {
+            bytesReceived = TIMED_OUT;
             break;
+          }
+          //only store the byteIn if there is space in the Rx buffer, otherwise just throw the byte away
           else if (_RxBuffNumBytes<_PEER2PEER_RX_BUFF_SIZE)
           {
             bytesReceived++;
-            //only store the byteIn if there is space in the Rx buffer, otherwise just throw the byte away
             _RxBuff[_RxBuffWriteLoc] = byteIn;
             _RxBuffNumBytes++;
             _RxBuffWriteLoc = (_RxBuffWriteLoc + 1) % _PEER2PEER_RX_BUFF_SIZE; //increment & wrap 
           }
         }
       }
+      else //upperByte==TIMED_OUT
+        bytesReceived = TIMED_OUT;
     }
+    else //lowerByte==TIMED_OUT
+      bytesReceived = TIMED_OUT;
   }
   
   return bytesReceived;
@@ -235,11 +242,11 @@ unsigned int eRCaGuy_Peer2Peer::receiveData()
 //-------------------------------------------------------------------------------------------------
 //sendData
 //-private method 
-//-returns # bytes sent (NOT counting the first 2 bytes which specify the # of data bytes to be sent), or -1 (same as 65535 actually, or "TIMED_OUT", since it is an unsigned value) if it times out 
+//-returns # bytes sent (NOT counting the first 2 bytes which specify the # of data bytes to be sent), or 65535 ("TIMED_OUT") if it times out 
 //-------------------------------------------------------------------------------------------------
 unsigned int eRCaGuy_Peer2Peer::sendData()
 {
-  unsigned int bytesSent = 0; ////////TODO: handle bytesSent variable, and the timeout code///////
+  unsigned int bytesSent = 0;
   
   if (_TxBuffNumBytes>0)
   {
@@ -247,19 +254,36 @@ unsigned int eRCaGuy_Peer2Peer::sendData()
     //prepare _TxBuffNumBytes variable to send, then send it Least Significant Byte first 
     byte lowerByte = _TxBuffNumBytes&0xFF;
     byte upperByte = (_TxBuffNumBytes>>8)&0xFF;
-    sendByte(lowerByte, true);
-    sendByte(upperByte);
-    //clock out the data 1 byte at a time 
-    while (_TxBuffNumBytes>0)
+    byte sendState = sendByte(lowerByte, true);
+    if (sendState!=TIMED_OUT)
     {
-      byte byteToSend = _TxBuff[_TxBuffReadLoc];
-      _TxBuffReadLoc = (_TxBuffReadLoc + 1) % _PEER2PEER_TX_BUFF_SIZE; //increment & wrap 
-      _TxBuffNumBytes--;
-      sendByte(byteToSend);
+      sendState = sendByte(upperByte);
+      if (sendState!=TIMED_OUT)
+      {
+        //clock out the data 1 byte at a time 
+        while (_TxBuffNumBytes>0)
+        {
+          byte byteToSend = _TxBuff[_TxBuffReadLoc];
+          _TxBuffReadLoc = (_TxBuffReadLoc + 1) % _PEER2PEER_TX_BUFF_SIZE; //increment & wrap 
+          _TxBuffNumBytes--;
+          sendState = sendByte(byteToSend);
+          if (sendState==TIMED_OUT)
+          {
+            bytesSent = TIMED_OUT;
+            break;
+          }
+          else
+            bytesSent++;
+        }
+      }
+      else //sendState = TIMED_OUT
+        bytesSent = TIMED_OUT;
     }
+    else //sendState==TIMED_OUT
+      bytesSent = TIMED_OUT;
   }
   
-  return bytesSent; //////////////
+  return bytesSent;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -274,14 +298,29 @@ unsigned int eRCaGuy_Peer2Peer::receiveByte()
   
   //we don't ever call this receiveByte() function unless we KNOW another byte is supposed to be coming in
   //-therefore, do a blocking wait until the _RxPin goes HIGH, indicating it is ready to send data again (ex: after processing interrupts between sending bytes)
-  while (digitalRead(_RxPin)==LOW){} //wait for _RxPin to go HIGH 
+  unsigned long tStart = millis(); //ms 
+  //wait for _RxPin to go HIGH 
+  while (digitalRead(_RxPin)==LOW)
+  {
+    if (millis() - tStart >= _timeout_ms)
+    {
+      return TIMED_OUT;
+    }
+  }
 
   //There is data to be received, so receive it
   //1st, write _TxPin HIGH to say, "I acknowledge you want to send."
   bool TxPinState = HIGH;
   digitalWrite(_TxPin, TxPinState);
   //2nd, wait until sender writes Tx pin LOW to tell receiver "start clocking data for me"
-  while (digitalRead(_RxPin)==HIGH){}
+  tStart = millis(); //ms 
+  while (digitalRead(_RxPin)==HIGH)
+  {
+    if (millis() - tStart >= _timeout_ms)
+    {
+      return TIMED_OUT;
+    }
+  }
   //sender is ready to receive data, so start clocking bits
   //-disable interrupts first to minimize time the sender has its interrupts disabled (ie: don't let the receiver's interrupt routines slow down this process either, so disable interrupts on the receiver side here as well)
   byte SREG_bak = SREG; //back up interrupt state
@@ -300,7 +339,7 @@ unsigned int eRCaGuy_Peer2Peer::receiveByte()
   digitalWrite(_TxPin, LOW); //prepare for next byte 
   SREG = SREG_bak; //restore interrupt state 
   
-  return byteIn; //////////////
+  return byteIn;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -316,7 +355,14 @@ unsigned int eRCaGuy_Peer2Peer::sendByte(byte byteToSend, bool isFirstByteToSend
   if (!isFirstByteToSend)
     delayMicroseconds(_clockDelay_us); //no need to do this for the first byte only, so avoid it for the first byte to speed things up a tiny bit 
   //3rd, poll and wait until the Rx pin goes HIGH which means the other device is ready to receive!
-  while (digitalRead(_RxPin==LOW)){}
+  unsigned long tStart = millis(); //ms 
+  while (digitalRead(_RxPin==LOW))
+  {
+    if (millis() - tStart >= _timeout_ms)
+    {
+      return TIMED_OUT;
+    }
+  }
   
   //save RxPinState_old so we can detect clock edges (pin state toggles) 
   bool RxPinState_old = HIGH; //this was the last known state before getting to this point 
@@ -326,13 +372,21 @@ unsigned int eRCaGuy_Peer2Peer::sendByte(byte byteToSend, bool isFirstByteToSend
   digitalWrite(_TxPin, LOW); 
   for (byte i=0; i<8; i++)
   {
-    while (digitalRead(_RxPin)==RxPinState_old){} //poll until Rx pin (clock signal) changes 
+    //poll until Rx pin (clock signal) changes 
+    tStart = millis(); //ms 
+    while (digitalRead(_RxPin)==RxPinState_old)
+    {
+      if (millis() - tStart >= _timeout_ms)
+      {
+        return TIMED_OUT;
+      }
+    } 
     RxPinState_old = !RxPinState_old; //update (pin state just toggled, so just toggle the variable) 
     digitalWrite(_TxPin, bitRead(byteToSend, i)); //write next data bit 
   }
   SREG = SREG_bak; //restore interrupt state 
   
-  return 1; ///////////////////////TODO: FIX THE RETURN 
+  return 1;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -379,11 +433,12 @@ bool eRCaGuy_Peer2Peer::placeByteInTxBuff(byte byteOut)
 //-------------------------------------------------------------------------------------------------
 //availableForWrite
 //-virtual method 
-//-returns # bytes sitting in the OUTGOING (Tx) buffer 
+//-returns # bytes available to be written (ie: still added to the Tx buffer) without blocking the write operation 
+//-see here: https://www.arduino.cc/en/Serial/AvailableForWrite
 //-------------------------------------------------------------------------------------------------
 int eRCaGuy_Peer2Peer::availableForWrite()
 {
-  return (int)_TxBuffNumBytes;
+  return (int)(_PEER2PEER_TX_BUFF_SIZE - _TxBuffNumBytes);
 }
 
 //-------------------------------------------------------------------------------------------------

@@ -23,8 +23,8 @@ CIRCUIT:
 //Macros 
 //COMMENT OUT THE STATEMENT BELOW THAT IS NOT TRUE
 //-UPLOAD THE ONE TO ONE ARDUINO, AND THE OTHER TO ANOTHER 
-#define I_AM_ARDUINO_1 //comment out if not true 
-// #define I_AM_ARDUINO_2 //comment out if not true 
+// #define I_AM_ARDUINO_1 //comment out if not true 
+#define I_AM_ARDUINO_2 //comment out if not true 
 
 #if defined(I_AM_ARDUINO_1)
   const char MY_NAME[] = "Arduino 1";
@@ -77,7 +77,15 @@ void loop()
   
   peer1.sendReceive(); //send and receive data; call as frequently as possible to minimize blocking time delay the sender must sit and wait for the receiver to talk 
   
-  
+  // //DEBUG TEST
+  // while (true)
+  // {
+    // pinMode(13, OUTPUT);
+    // digitalWrite(13, HIGH);
+    // delay(100);
+    // digitalWrite(13, LOW);
+    // delay(100);
+  // }
 }
 
 
