@@ -20,6 +20,18 @@ CIRCUIT:
 
 #include <eRCaGuy_Peer2Peer.h>
 
+//Macros 
+//COMMENT OUT THE STATEMENT BELOW THAT IS NOT TRUE
+//-UPLOAD THE ONE TO ONE ARDUINO, AND THE OTHER TO ANOTHER 
+#define I_AM_ARDUINO_1 //comment out if not true 
+// #define I_AM_ARDUINO_2 //comment out if not true 
+
+#if defined(I_AM_ARDUINO_1)
+  const char MY_NAME[] = "Arduino 1";
+#elif defined(I_AM_ARDUINO_2)
+  const char MY_NAME[] = "Arduino 2";
+#endif 
+
 //pins (choose any two pins)
 const byte RX_PIN = A0;
 const byte TX_PIN = A1;
@@ -35,10 +47,11 @@ void setup()
   //Open serial communications and wait for port to open
   Serial.begin(115200);
   while (!Serial) {} //wait for serial port to connect. Needed for native USB ports only (ex: on 32u4 mcu).
-  Serial.println("Begin");
+  Serial.print("Begin. This is "); Serial.print(MY_NAME);
   
+  //send data from one peer to another to start 
   peer1.begin();
-  peer1.println("From Arduino 1.");
+  peer1.print("From "); peer1.println(MY_NAME);
 }
 
 //-----------------------------------------------------------------------------------------------
@@ -47,15 +60,24 @@ void setup()
 //-----------------------------------------------------------------------------------------------
 void loop() 
 { 
-  if (peer1.available()) //if bytes are ready for reading 
+  //if bytes are ready for reading from another peer (ex: Arduino)
+  if (peer1.available()) 
   {
+    //write to the Serial Monitor 
     Serial.write(peer1.read());
   }
   
+  //if bytes are ready for reading from the user's Serial Monitor 
   if (Serial.available()) 
   {
+    Serial.write(Serial.read()); //DEBUG TEST 
+    //write to the peer (ex: another Arduino) 
     peer1.write(Serial.read());
   }
+  
+  peer1.sendReceive(); //send and receive data; call as frequently as possible to minimize blocking time delay the sender must sit and wait for the receiver to talk 
+  
+  
 }
 
 

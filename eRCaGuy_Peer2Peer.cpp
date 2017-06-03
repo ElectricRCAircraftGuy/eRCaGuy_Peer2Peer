@@ -192,7 +192,7 @@ sendReceive_t eRCaGuy_Peer2Peer::sendReceive()
 //-------------------------------------------------------------------------------------------------
 //receiveData
 //-private method 
-//-returns # bytes received, or -1 (same as 65535 actually, or "TIMED_OUT", since it is an unsigned value) if it times out 
+//-returns # data bytes received (NOT counting the first 2 bytes which specify how many bytes are going to be sent), or 65535 ("TIMED_OUT") if it times out 
 //-------------------------------------------------------------------------------------------------
 unsigned int eRCaGuy_Peer2Peer::receiveData()
 {
@@ -201,17 +201,41 @@ unsigned int eRCaGuy_Peer2Peer::receiveData()
   //-check to see if Rx pin is HIGH, which indicates the other device wants to SEND data 
   if (digitalRead(_RxPin)==HIGH)
   {
-    //There is data to be received, so receive it
-    
+    //prepare to read in the first 2 bytes as the # indicating how many bytes will be sent 
+    byte lowerByte, upperByte;
+    lowerByte = receiveByte();
+    if (lowerByte!=TIMED_OUT)
+    {
+      upperByte = receiveByte();
+      if (upperByte!=TIMED_OUT)
+      {
+        unsigned int bytesToReceive = (upperByte<<8) | lowerByte;
+        //receive all incoming bytes, unless timeout occurs 
+        for (unsigned int i=0; i<bytesToReceive; i++)
+        {
+          byte byteIn = receiveByte();
+          if (byteIn==TIMED_OUT)
+            break;
+          else if (_RxBuffNumBytes<_PEER2PEER_RX_BUFF_SIZE)
+          {
+            bytesReceived++;
+            //only store the byteIn if there is space in the Rx buffer, otherwise just throw the byte away
+            _RxBuff[_RxBuffWriteLoc] = byteIn;
+            _RxBuffNumBytes++;
+            _RxBuffWriteLoc = (_RxBuffWriteLoc + 1) % _PEER2PEER_RX_BUFF_SIZE; //increment & wrap 
+          }
+        }
+      }
+    }
   }
-  ///////////
+  
   return bytesReceived;
 }
 
 //-------------------------------------------------------------------------------------------------
 //sendData
 //-private method 
-//-returns # bytes sent, or -1 (same as 65535 actually, or "TIMED_OUT", since it is an unsigned value) if it times out 
+//-returns # bytes sent (NOT counting the first 2 bytes which specify the # of data bytes to be sent), or -1 (same as 65535 actually, or "TIMED_OUT", since it is an unsigned value) if it times out 
 //-------------------------------------------------------------------------------------------------
 unsigned int eRCaGuy_Peer2Peer::sendData()
 {
@@ -241,11 +265,42 @@ unsigned int eRCaGuy_Peer2Peer::sendData()
 //-------------------------------------------------------------------------------------------------
 //receiveByte
 //-private method 
+//-don't ever call this receiveByte() function unless we KNOW another byte is supposed to be coming in
 //-returns the byte value if a byte was successfully received, or 65535 if it timed out 
 //-------------------------------------------------------------------------------------------------
 unsigned int eRCaGuy_Peer2Peer::receiveByte()
 {
-  return 7; //////////////
+  byte byteIn;
+  
+  //we don't ever call this receiveByte() function unless we KNOW another byte is supposed to be coming in
+  //-therefore, do a blocking wait until the _RxPin goes HIGH, indicating it is ready to send data again (ex: after processing interrupts between sending bytes)
+  while (digitalRead(_RxPin)==LOW){} //wait for _RxPin to go HIGH 
+
+  //There is data to be received, so receive it
+  //1st, write _TxPin HIGH to say, "I acknowledge you want to send."
+  bool TxPinState = HIGH;
+  digitalWrite(_TxPin, TxPinState);
+  //2nd, wait until sender writes Tx pin LOW to tell receiver "start clocking data for me"
+  while (digitalRead(_RxPin)==HIGH){}
+  //sender is ready to receive data, so start clocking bits
+  //-disable interrupts first to minimize time the sender has its interrupts disabled (ie: don't let the receiver's interrupt routines slow down this process either, so disable interrupts on the receiver side here as well)
+  byte SREG_bak = SREG; //back up interrupt state
+  noInterrupts();
+  //now clock 8 bits 
+  for (byte i=0; i<8; i++)
+  {
+    //toggle pin and write it 
+    TxPinState = !TxPinState; //toggle; //////////////TODO: FUTURE WORK--FOR AVR MCUS, REPLACE THIS WITH A SINGLE XOR COMMAND (^) TO TOGGLE THE PIN DIRECTLY AT THE REGISTER LEVEL IN A SINGLE CLOCK INSTRUCTION
+    digitalWrite(_TxPin, TxPinState);
+    //wait a FIXED_TIME_PD called "_clockDelay_us" in order to give the Tx time to set its data state on its Tx line
+    delayMicroseconds(_clockDelay_us);
+    //now read the data bit from the sender before clocking another bit 
+    bitWrite(byteIn, i, digitalRead(_RxPin));
+  }
+  digitalWrite(_TxPin, LOW); //prepare for next byte 
+  SREG = SREG_bak; //restore interrupt state 
+  
+  return byteIn; //////////////
 }
 
 //-------------------------------------------------------------------------------------------------
