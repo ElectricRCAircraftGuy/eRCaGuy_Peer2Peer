@@ -145,6 +145,8 @@ class eRCaGuy_Peer2Peer : public Stream //note that Stream inherits Print
     bool placeByteInTxBuff(byte byteOut);
     unsigned int receiveData();
     unsigned int sendData();
+    unsigned int receiveByte();
+    unsigned int sendByte(byte byteToSend, bool isFirstByteToSend=false);
   
 };
 

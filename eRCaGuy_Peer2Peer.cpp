@@ -144,7 +144,6 @@ void eRCaGuy_Peer2Peer::setClockDelay(unsigned int clockDelay_us)
 //-call as frequently as possible to minimize the blocking time delay that other senders must sit and wait for this device to receive and talk 
 //-returns a struct of type sendReceive_t, defined in the header file 
 //-------------------------------------------------------------------------------------------------
-  ///////////TODO (IN WORK)///////////////
 /*
 Description of send/receive protocol:
  - Tx = "transmitter" or "sender" below 
@@ -154,6 +153,8 @@ Tx writes pin HIGH to say "I want to send data". Rx comes around and eventually 
 
 After the receiver (Rx) clocks 8 bits by toggling its Tx pin state 8 times and waiting the appropriate _clockDelay_us time pd after each clock edge and before reading the Tx's data state, it stops, writes its Tx pin LOW(*), and *enables* interrupts. Once the Tx has seen 8 clocked edges from the Rx it stops too, and it *enables* interrupts. Then, the Tx writes its Tx pin state HIGH again to say, "I want to send the next byte." At this moment, the Tx ensures _clockDelay_us time has passed BEFORE reading the acknowledgement pin from the Rx, to give the Rx adequate time to set its acknowledgement line LOW (see (*) point just above) before enabling and processing any interrupts (otherwise the Tx may read a false-positive acknowledgement from the Rx when the Rx is simply stuck processing a long ISR). The Tx's interrupts are still *en*abled. The Rx (interrupts still *en*abled), sees this HIGH state, and writes its Tx pin HIGH to say "I acknowledge you want to send." The sequence begins again as described above. 
 
+Q: What if the Tx has a really long interrupt (ISR) right after it *enables* interrupts but before it writes its Tx pin state HIGH again to say, "I want to send the next byte."?
+A: Everything is ok. The Rx does NOT go on without it, thinking it has no more data to send, since it knows that it must receive *at least* 2 bytes for the _TxBuffNumBytes variable, + that number of bytes, before the sender is done sending. Therefore, it will simply sit around until either the sender is ready again or it times out, then the sending will continue. 
 Q: What if the *Tx* has a really long interrupt after it writes its pin HIGH and before noticing that the Rx acknowledges? Will this mess up the sequence?
 A: NO, because once the Rx acknowledges, if the *Tx* is still stuck in a long ISR, it will simply take longer to exit the ISR, detect that the Rx acknowledged (the Rx will simply be sitting there blocking and waiting), disable interrupts, and write its Tx pin LOW to say, "start clocking data for me." No problems caused, other than making the Rx block a little longer while the Tx finished its ISR so it could tell the Rx to start clocking data for it. 
 Q: What if the *Rx* has a really long interrupt after clocking all 8 bits, waiting the appropriate _clockDelay_us time, reading the 8th bit from the Tx, writing its Tx pin LOW, and enabling interrupts? Will this mess up the sequence?
@@ -214,20 +215,69 @@ unsigned int eRCaGuy_Peer2Peer::receiveData()
 //-------------------------------------------------------------------------------------------------
 unsigned int eRCaGuy_Peer2Peer::sendData()
 {
-  unsigned int bytesSent = 0;
+  unsigned int bytesSent = 0; ////////TODO: handle bytesSent variable, and the timeout code///////
   
-  /////////////////
   if (_TxBuffNumBytes>0)
   {
     //There is data to be sent, so send it 
-    //1st, set Tx pin HIGH to tell the other device, "I want to send"
-    digitalWrite(_TxPin, HIGH);
-    //2nd, poll and wait until the Rx pin goes HIGH which means the other device is ready to receive!
-    while (digitalRead(_RxPin==LOW)) {}
-    //ok, _RxPin is HIGH now, so set your next bit!
+    //prepare _TxBuffNumBytes variable to send, then send it Least Significant Byte first 
+    byte lowerByte = _TxBuffNumBytes&0xFF;
+    byte upperByte = (_TxBuffNumBytes>>8)&0xFF;
+    sendByte(lowerByte, true);
+    sendByte(upperByte);
+    //clock out the data 1 byte at a time 
+    while (_TxBuffNumBytes>0)
+    {
+      byte byteToSend = _TxBuff[_TxBuffReadLoc];
+      _TxBuffReadLoc = (_TxBuffReadLoc + 1) % _PEER2PEER_TX_BUFF_SIZE; //increment & wrap 
+      _TxBuffNumBytes--;
+      sendByte(byteToSend);
+    }
   }
   
-  return bytesSent;
+  return bytesSent; //////////////
+}
+
+//-------------------------------------------------------------------------------------------------
+//receiveByte
+//-private method 
+//-returns the byte value if a byte was successfully received, or 65535 if it timed out 
+//-------------------------------------------------------------------------------------------------
+unsigned int eRCaGuy_Peer2Peer::receiveByte()
+{
+  return 7; //////////////
+}
+
+//-------------------------------------------------------------------------------------------------
+//sendByte
+//-private method 
+//-returns 1 if a byte was successfully sent, or 65535 if it timed out 
+//-------------------------------------------------------------------------------------------------
+unsigned int eRCaGuy_Peer2Peer::sendByte(byte byteToSend, bool isFirstByteToSend)
+{
+  //1st, set Tx pin HIGH to tell the other device, "I want to send"
+  digitalWrite(_TxPin, HIGH);
+  //2nd, delay for all but the first byte to be sent 
+  if (!isFirstByteToSend)
+    delayMicroseconds(_clockDelay_us); //no need to do this for the first byte only, so avoid it for the first byte to speed things up a tiny bit 
+  //3rd, poll and wait until the Rx pin goes HIGH which means the other device is ready to receive!
+  while (digitalRead(_RxPin==LOW)){}
+  
+  //save RxPinState_old so we can detect clock edges (pin state toggles) 
+  bool RxPinState_old = HIGH; //this was the last known state before getting to this point 
+  //ok, _RxPin is HIGH now, so disable interrupts and write Tx pin LOW to say, "start clocking data for me"
+  byte SREG_bak = SREG; //back up interrupt state
+  noInterrupts();
+  digitalWrite(_TxPin, LOW); 
+  for (byte i=0; i<8; i++)
+  {
+    while (digitalRead(_RxPin)==RxPinState_old){} //poll until Rx pin (clock signal) changes 
+    RxPinState_old = !RxPinState_old; //update (pin state just toggled, so just toggle the variable) 
+    digitalWrite(_TxPin, bitRead(byteToSend, i)); //write next data bit 
+  }
+  SREG = SREG_bak; //restore interrupt state 
+  
+  return 1; ///////////////////////TODO: FIX THE RETURN 
 }
 
 //-------------------------------------------------------------------------------------------------
