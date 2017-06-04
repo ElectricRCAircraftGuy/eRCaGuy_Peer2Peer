@@ -47,7 +47,7 @@ void setup()
   //Open serial communications and wait for port to open
   Serial.begin(115200);
   while (!Serial) {} //wait for serial port to connect. Needed for native USB ports only (ex: on 32u4 mcu).
-  Serial.print("Begin. This is "); Serial.print(MY_NAME);
+  Serial.print("Begin. This is "); Serial.println(MY_NAME);
   
   //send data from one peer to another to start 
   peer1.begin();
@@ -70,12 +70,22 @@ void loop()
   //if bytes are ready for reading from the user's Serial Monitor 
   if (Serial.available()) 
   {
-    Serial.write(Serial.read()); //DEBUG TEST 
+    char cIn = Serial.read();
+    
+    Serial.write(cIn); //DEBUG TEST 
     //write to the peer (ex: another Arduino) 
-    peer1.write(Serial.read());
+    peer1.write(cIn);
   }
   
   peer1.sendReceive(); //send and receive data; call as frequently as possible to minimize blocking time delay the sender must sit and wait for the receiver to talk 
+  
+  // Serial.println("test"); //DEBUGGING 
+  
+  //DEBUGGING
+  pinMode(13, OUTPUT);
+  static bool LEDState = HIGH;
+  LEDState = !LEDState;
+  digitalWrite(13, LEDState);
   
   // //DEBUG TEST
   // while (true)

@@ -167,24 +167,39 @@ sendReceive_t eRCaGuy_Peer2Peer::sendReceive()
   //1st, RECEIVE DATA
   unsigned int receiveState = receiveData();
   if (receiveState==TIMED_OUT)
+  {
     sendReceiveState.timedOut = true;
+    digitalWrite(_TxPin, LOW); //prepare for next sendReceive
+  }
   else
+  {
     sendReceiveState.bytesReceived = receiveState;
+  }
   
   //2nd, SEND DATA, if we have any to send 
   unsigned int sendState = sendData();
   if (sendState==TIMED_OUT)
+  {
     sendReceiveState.timedOut = true;
+    digitalWrite(_TxPin, LOW); //prepare for next sendReceive
+  }
   else 
+  {
     sendReceiveState.bytesSent = sendState;
+  }
   
   //3rd, RECEIVE DATA again! 
   //-Otherwise, you might waste a loop cycle before you receive the other one's data even though he wanted to send the whole time! It's just that he was super polite and received your data first (notice above--we receive first, BEFORE trying to send). So, be a gentleman and receive his data now before you go running off again!
   receiveState = receiveData();
   if (receiveState==TIMED_OUT)
+  {
     sendReceiveState.timedOut = true;
+    digitalWrite(_TxPin, LOW); //prepare for next sendReceive
+  }
   else
+  {
     sendReceiveState.bytesReceived += receiveState;
+  }
   
   return sendReceiveState;
 }
@@ -202,7 +217,7 @@ unsigned int eRCaGuy_Peer2Peer::receiveData()
   if (digitalRead(_RxPin)==HIGH)
   {
     //prepare to read in the first 2 bytes as the # indicating how many bytes will be sent 
-    byte lowerByte, upperByte;
+    unsigned int lowerByte, upperByte;
     lowerByte = receiveByte();
     if (lowerByte!=TIMED_OUT)
     {
@@ -213,11 +228,10 @@ unsigned int eRCaGuy_Peer2Peer::receiveData()
         //receive all incoming bytes, unless timeout occurs 
         for (unsigned int i=0; i<bytesToReceive; i++)
         {
-          byte byteIn = receiveByte();
+          unsigned int byteIn = receiveByte();
           if (byteIn==TIMED_OUT)
           {
-            bytesReceived = TIMED_OUT;
-            break;
+            return TIMED_OUT;
           }
           //only store the byteIn if there is space in the Rx buffer, otherwise just throw the byte away
           else if (_RxBuffNumBytes<_PEER2PEER_RX_BUFF_SIZE)
@@ -230,10 +244,10 @@ unsigned int eRCaGuy_Peer2Peer::receiveData()
         }
       }
       else //upperByte==TIMED_OUT
-        bytesReceived = TIMED_OUT;
+        return TIMED_OUT;
     }
     else //lowerByte==TIMED_OUT
-      bytesReceived = TIMED_OUT;
+      return TIMED_OUT;
   }
   
   return bytesReceived;
@@ -254,7 +268,7 @@ unsigned int eRCaGuy_Peer2Peer::sendData()
     //prepare _TxBuffNumBytes variable to send, then send it Least Significant Byte first 
     byte lowerByte = _TxBuffNumBytes&0xFF;
     byte upperByte = (_TxBuffNumBytes>>8)&0xFF;
-    byte sendState = sendByte(lowerByte, true);
+    unsigned int sendState = sendByte(lowerByte, true);
     if (sendState!=TIMED_OUT)
     {
       sendState = sendByte(upperByte);
@@ -269,18 +283,17 @@ unsigned int eRCaGuy_Peer2Peer::sendData()
           sendState = sendByte(byteToSend);
           if (sendState==TIMED_OUT)
           {
-            bytesSent = TIMED_OUT;
-            break;
+            return TIMED_OUT;
           }
           else
             bytesSent++;
         }
       }
-      else //sendState = TIMED_OUT
-        bytesSent = TIMED_OUT;
+      else //sendState==TIMED_OUT
+        return TIMED_OUT;
     }
     else //sendState==TIMED_OUT
-      bytesSent = TIMED_OUT;
+      return TIMED_OUT;
   }
   
   return bytesSent;

@@ -112,7 +112,7 @@ class eRCaGuy_Peer2Peer : public Stream //note that Stream inherits Print
     virtual int peek();
     virtual void flush(); 
     
-    using Print::write; //as SoftwareSerial.h does too, this line gives us access to the Print class's overloaded, *non*virtual implementations of write, while still defining the write method above as the default one to use when calling write through this Peer2Peer class, due to polymorphism. Some of the overloaded implementations of write defined in Print allow printing entire buffers (arrays of bytes), for instance. 
+    // using Print::write; //as SoftwareSerial.h does too, this line gives us access to the Print class's overloaded, *non*virtual implementations of write, while still defining the write method above as the default one to use when calling write through this Peer2Peer class, due to polymorphism. Some of the overloaded implementations of write defined in Print allow printing entire buffers (arrays of bytes), for instance. 
     //See here for an Arduino demonstration usage of the above: https://github.com/arduino/Arduino/blob/master/hardware/arduino/avr/cores/arduino/HardwareSerial.h
     //-it says "using Print::write; // pull in write(str) and write(buf, size) from Print"
     //Also see here: https://arduino.stackexchange.com/questions/38965/help-understanding-printwrite-it-calls-write-where-is-write-defined-h 
