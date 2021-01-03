@@ -1,6 +1,9 @@
 
 # eRCaGuy_Peer2Peer Arduino library 
 
+## Status
+Work in progress. NOT yet functional. 
+
 ## DESCRIPTION:   
  - Ideal for getting two or more microcontrollers (ex: Arduinos) to talk to each other
  - A peer-to-peer send and receive synchronous half-duplex communication protocol with handshaking and auto-timeout, that requires only 2 pins (any 2 pins) per peer and no additional timers, and no interrupts whatsoever (but can optionally use them for increased performance).  
